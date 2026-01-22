@@ -9,8 +9,9 @@ import { useState } from 'react';
 import { useDocumentStore } from '@/store/documentStore';
 import Header from '@/components/shared/Header';
 import Footer from '@/components/shared/Footer';
-import UploadView from '@/components/UploadView';
+import UploadView from '@/components/Upload/UploadView';
 import { DocumentViewer } from '@/components/DocumentViewer';
+import { FloatingPlayer } from '@/components/AudioPlayer';
 
 export default function Home() {
   const {
@@ -43,17 +44,19 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
-      <Header
-        documentTitle={currentDocument?.title}
-        hasDocument={!!currentDocument}
-        onReset={handleReset}
-      />
+      <div className='mb-4'>
+        <Header
+          documentTitle={currentDocument?.title}
+          hasDocument={!!currentDocument}
+          onReset={handleReset}
+        />
+      </div>
 
       {/* Main Content */}
       <main className={`
         flex-1
         ${currentDocument 
-          ? 'px-2 py-2 sm:px-3 sm:py-3 md:px-4 md:py-4' 
+          ? 'px-2 py-2 sm:px-3 sm:py-3 md:px-4 md:py-4 pb-32' 
           : 'px-3 py-4 sm:px-4 sm:py-6 md:px-6 lg:px-8 md:py-8'
         }
       `}>
@@ -71,6 +74,14 @@ export default function Home() {
           <DocumentViewer document={currentDocument} />
         )}
       </main>
+
+      {/* Floating Audio Player - Shows when document is loaded */}
+      {currentDocument && (
+        <FloatingPlayer
+          documentId={currentDocument.id}
+          chapterTitle={currentDocument.title}
+        />
+      )}
 
       {/* Footer - Hidden when viewing document on mobile */}
       <div className={currentDocument ? 'hidden md:block' : ''}>

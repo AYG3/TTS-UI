@@ -6,7 +6,8 @@
 import axios, { AxiosError } from 'axios';
 import { ApiResponse } from '@/types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// Backend API runs on port 3001, Next.js frontend runs on port 3000
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 const apiClient = axios.create({
   baseURL: API_URL,

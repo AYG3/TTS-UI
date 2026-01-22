@@ -23,8 +23,8 @@ export default function Header({ documentTitle, hasDocument, onReset }: HeaderPr
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
-    <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
+    <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm sticky top-0 z-100">
+      <div className="bg-white max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
         {/* Mobile Header */}
         <div className="flex md:hidden items-center justify-between h-14">
           {/* Logo - Compact on mobile */}

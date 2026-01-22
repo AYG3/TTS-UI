@@ -19,6 +19,8 @@ export interface DocumentViewerState {
   pdfDocument: PDFDocumentProxy | null;
   /** Whether TOC sidebar is open */
   isTocOpen: boolean;
+  /** Sidebar width in pixels */
+  sidebarWidth: number;
   /** Current zoom scale */
   scale: number;
 }
@@ -36,6 +38,8 @@ export interface DocumentViewerActions {
   handleWordClick: (event: { word: any }) => void;
   /** Handle zoom change */
   handleZoomChange: (newScale: number) => void;
+  /** Handle sidebar width change */
+  handleSidebarWidthChange: (width: number) => void;
   /** Reset zoom to default */
   resetZoom: () => void;
 }
@@ -53,6 +57,7 @@ export function useDocumentViewer(): UseDocumentViewerResult {
   const [targetPage, setTargetPage] = useState<number | undefined>(undefined);
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
   const [isTocOpen, setIsTocOpen] = useState(false); // Closed by default on mobile
+  const [sidebarWidth, setSidebarWidth] = useState(280);
   const [scale, setScale] = useState(DEFAULT_SCALE);
 
   // Actions
@@ -97,6 +102,10 @@ export function useDocumentViewer(): UseDocumentViewerResult {
     setScale(DEFAULT_SCALE);
   }, []);
 
+  const handleSidebarWidthChange = useCallback((width: number) => {
+    setSidebarWidth(width);
+  }, []);
+
   return {
     // State
     activeWordIndex,
@@ -104,6 +113,7 @@ export function useDocumentViewer(): UseDocumentViewerResult {
     targetPage,
     pdfDocument,
     isTocOpen,
+    sidebarWidth,
     scale,
     // Actions
     handleDocumentLoad,
@@ -112,6 +122,7 @@ export function useDocumentViewer(): UseDocumentViewerResult {
     toggleToc,
     handleWordClick,
     handleZoomChange,
+    handleSidebarWidthChange,
     resetZoom,
   };
 }

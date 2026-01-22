@@ -84,35 +84,6 @@ export const DocumentStatsBar = memo(function DocumentStatsBar({
             )}
           </div>
 
-          {/* Zoom Controls */}
-          {/* {isPdf && (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={onZoomOut}
-                className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                aria-label="Zoom out"
-              >
-                <FiZoomOut className="w-4 h-4" />
-              </button>
-              <span className="text-xs text-gray-500 dark:text-gray-400 w-10 text-center">
-                {scale ? `${Math.round(scale * 100)}%` : '100%'}
-              </span>
-              <button
-                onClick={onZoomIn}
-                className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                aria-label="Zoom in"
-              >
-                <FiZoomIn className="w-4 h-4" />
-              </button>
-              <button
-                onClick={onResetZoom}
-                className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                aria-label="Reset zoom"
-              >
-                <FiRotateCcw className="w-4 h-4" />
-              </button>
-            </div>
-          )} */}
         </div>
       </div>
 

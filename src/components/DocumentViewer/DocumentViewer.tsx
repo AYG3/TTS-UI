@@ -26,6 +26,7 @@ export const DocumentViewer = memo(function DocumentViewer({ document }: Documen
     targetPage,
     pdfDocument,
     isTocOpen,
+    sidebarWidth,
     scale,
     // Actions
     handleDocumentLoad,
@@ -34,6 +35,7 @@ export const DocumentViewer = memo(function DocumentViewer({ document }: Documen
     toggleToc,
     handleWordClick,
     handleZoomChange,
+    handleSidebarWidthChange,
     resetZoom,
   } = useDocumentViewer();
 
@@ -66,6 +68,7 @@ export const DocumentViewer = memo(function DocumentViewer({ document }: Documen
           targetPage={targetPage}
           pdfDocument={pdfDocument}
           isTocOpen={isTocOpen}
+          sidebarWidth={sidebarWidth}
           scale={scale}
           onDocumentLoad={handleDocumentLoad}
           onPageChange={handlePageChange}
@@ -73,6 +76,7 @@ export const DocumentViewer = memo(function DocumentViewer({ document }: Documen
           onToggleToc={toggleToc}
           onWordClick={handleWordClick}
           onZoomChange={handleZoomChange}
+          onSidebarWidthChange={handleSidebarWidthChange}
         />
       ) : (
         <TextDocumentViewer document={document} />

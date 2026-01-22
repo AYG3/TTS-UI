@@ -5,8 +5,8 @@
  * Mobile-first document upload interface with features showcase
  */
 
-import UploadZone from '@/components/UploadZone';
-import UploadProgress from '@/components/UploadProgress';
+import UploadZone from './UploadZone';
+import UploadProgress from './UploadProgress';
 
 interface UploadViewProps {
   /** Currently selected file */

@@ -4,6 +4,6 @@
  */
 
 export { TocItem, type TocItemData } from './TocItem';
-export { TocSidebar, default } from './TocSidebar';
+export { TocPanel } from './TocPanel';
 export { useTocOutline } from './useTocOutline';
 export { getPdfTocOutlineWithPages } from './getPdfTocOutlineWithPages';

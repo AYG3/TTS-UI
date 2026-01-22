@@ -5,9 +5,12 @@
  * Renders PDF with TOC sidebar and pinch-to-zoom support
  */
 
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useState } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-import { PdfWordClickViewer, TocSidebar, useTocOutline } from '@/components/Pdf';
+import { PdfWordClickViewer, useTocOutline } from '@/components/Pdf';
+import { TocPanel } from '@/components/Pdf/Toc/TocPanel';
+import { ThumbnailPanel } from '@/components/Pdf/ThumbnailSidebar/ThumbnailPanel';
+import { PdfSidebarShell, SidebarHeader, SidebarPanel, type SidebarMode } from '@/components/Pdf/SidebarShell';
 import { usePinchZoom } from './hooks/usePinchZoom';
 import type { Document } from '@/types';
 
@@ -24,6 +27,8 @@ interface PdfDocumentViewerProps {
   pdfDocument: PDFDocumentProxy | null;
   /** Whether TOC is open */
   isTocOpen: boolean;
+  /** Sidebar width */
+  sidebarWidth: number;
   /** Current zoom scale */
   scale: number;
   /** Callbacks */
@@ -33,6 +38,7 @@ interface PdfDocumentViewerProps {
   onToggleToc: () => void;
   onWordClick: (event: { word: any }) => void;
   onZoomChange: (scale: number) => void;
+  onSidebarWidthChange: (width: number) => void;
 }
 
 export const PdfDocumentViewer = memo(function PdfDocumentViewer({
@@ -42,6 +48,7 @@ export const PdfDocumentViewer = memo(function PdfDocumentViewer({
   targetPage,
   pdfDocument,
   isTocOpen,
+  sidebarWidth,
   scale,
   onDocumentLoad,
   onPageChange,
@@ -49,7 +56,11 @@ export const PdfDocumentViewer = memo(function PdfDocumentViewer({
   onToggleToc,
   onWordClick,
   onZoomChange,
+  onSidebarWidthChange,
 }: PdfDocumentViewerProps) {
+  // Sidebar mode state: 'toc' or 'thumbnails'
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>('toc');
+
   // Get TOC from PDF document
   const { items: tocItems, isLoading: isTocLoading } = useTocOutline(pdfDocument);
 
@@ -64,44 +75,64 @@ export const PdfDocumentViewer = memo(function PdfDocumentViewer({
   // Construct PDF URL from stored filename
   const getPdfUrl = useCallback(() => {
     // Use storedFilename if available, otherwise extract from filePath
+    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '');
     if (document.storedFilename) {
-      return `http://localhost:3001/uploads/${document.storedFilename}`;
+      return `${baseUrl}/uploads/${document.storedFilename}`;
     }
     const filename = document.filePath?.split('/').pop() || document.filename;
-    return `http://localhost:3001/uploads/${filename}`;
+    return `${baseUrl}/uploads/${filename}`;
   }, [document]);
 
   const pdfUrl = getPdfUrl();
+
+
 
   return (
     <div 
       ref={containerRef}
       className="flex flex-col md:flex-row h-[calc(100vh-180px)] md:h-[calc(100vh-200px)] touch-manipulation"
     >
-      {/* TOC Sidebar - Hidden on mobile when closed, slide-over on mobile */}
-      <div className={`
-        ${isTocOpen ? 'fixed inset-0 z-40 md:relative md:inset-auto' : 'hidden md:block'}
-      `}>
-        {/* Mobile overlay backdrop */}
-        {isTocOpen && (
-          <div 
-            className="absolute inset-0 bg-black/50 md:hidden"
-            onClick={onToggleToc}
-          />
-        )}
-        
-        <TocSidebar
-          items={tocItems}
-          isLoading={isTocLoading}
-          onNavigate={onTocNavigate}
-          activePage={currentPage}
-          isOpen={isTocOpen}
-          onToggle={onToggleToc}
-          initialWidth={280}
-          minWidth={200}
-          maxWidth={450}
+      {/* Sidebar Shell */}
+      <PdfSidebarShell
+        isOpen={isTocOpen}
+        width={sidebarWidth}
+        minWidth={200}
+        maxWidth={450}
+        onResize={onSidebarWidthChange}
+        onClose={onToggleToc}
+      >
+        {/* Sidebar Header with Tabs */}
+        <SidebarHeader
+          mode={sidebarMode}
+          onModeChange={setSidebarMode}
+          onClose={onToggleToc}
         />
-      </div>
+
+        {/* TOC Panel */}
+        <SidebarPanel mode={sidebarMode} panelMode="toc">
+          <TocPanel
+            items={tocItems}
+            isLoading={isTocLoading}
+            onNavigate={onTocNavigate}
+            activePage={currentPage}
+            onClose={onToggleToc}
+          />
+        </SidebarPanel>
+
+        {/* Thumbnails Panel */}
+        <SidebarPanel mode={sidebarMode} panelMode="thumbnails">
+          <ThumbnailPanel
+            pdf={pdfDocument}
+            currentPage={currentPage}
+            onPageSelect={onTocNavigate}
+            options={{
+              scale: 0.25,
+              progressive: true,
+              initialPages: 10,
+            }}
+          />
+        </SidebarPanel>
+      </PdfSidebarShell>
 
       {/* PDF Viewer */}
       <div className="flex-1 min-w-0 overflow-hidden">
