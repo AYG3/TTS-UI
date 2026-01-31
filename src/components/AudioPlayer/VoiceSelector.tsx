@@ -25,12 +25,24 @@ interface VoiceSelectorProps {
 }
 
 export function VoiceSelector({ isOpen, onClose, onVoiceSelect }: VoiceSelectorProps) {
+  // Track system/theme dark mode (listens for `class="dark"` on <html>)
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  useEffect(() => {
+    setIsDarkMode(document.documentElement.classList.contains('dark'));
+    const observer = new MutationObserver(() => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
   const {
     availableVoices,
     selectedVoiceId,
     loadVoices,
-    setSelectedVoice,
+    switchVoice,
     isLoading,
+    isSwitchingVoice,
   } = useAudioPlayerStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -117,9 +129,16 @@ export function VoiceSelector({ isOpen, onClose, onVoiceSelect }: VoiceSelectorP
     };
   };
 
-  // Handle voice selection
-  const handleSelectVoice = (voiceId: string) => {
-    setSelectedVoice(voiceId);
+  // Handle voice selection - uses switchVoice to regenerate audio
+  const handleSelectVoice = async (voiceId: string) => {
+    // Don't allow selection while already switching
+    if (isSwitchingVoice) return;
+    
+    // Only switch if it's a different voice
+    if (voiceId !== selectedVoiceId) {
+      await switchVoice(voiceId);
+    }
+    
     onVoiceSelect?.(voiceId);
     onClose();
   };
@@ -149,10 +168,14 @@ export function VoiceSelector({ isOpen, onClose, onVoiceSelect }: VoiceSelectorP
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center pb-24 px-4 bg-black/50 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 flex items-end justify-center pb-24 px-4"
+      
+    >
       <div
         ref={modalRef}
-        className="w-full max-w-md bg-gray-900 rounded-2xl shadow-2xl border border-gray-700 overflow-hidden animate-slide-up"
+        className="max-w-md bg-black rounded-2xl shadow-2xl border border-gray-700 overflow-hidden animate-slide-up"
+        style={{ backgroundColor: isDarkMode ? 'black' : 'white' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
@@ -181,7 +204,14 @@ export function VoiceSelector({ isOpen, onClose, onVoiceSelect }: VoiceSelectorP
         </div>
 
         {/* Voice list */}
-        <div className="max-h-80 overflow-y-auto">
+        <div className="max-h-80 overflow-y-auto relative">
+          {/* Switching voice overlay */}
+          {isSwitchingVoice && (
+            <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-10">
+              <LoadingSpinner />
+              <p className="mt-2 text-white">Switching voice...</p>
+            </div>
+          )}
           {isLoading ? (
             <div className="p-8 text-center text-gray-400">
               <LoadingSpinner />

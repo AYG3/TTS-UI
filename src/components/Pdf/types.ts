@@ -44,6 +44,9 @@ export interface PageTextContent {
   rawText: string;
 }
 
+/** PDF view mode */
+export type PdfViewMode = 'continuous' | 'single';
+
 /** Document-level text data */
 export interface DocumentTextContent {
   pages: PageTextContent[];

@@ -7,18 +7,21 @@
 
 import { memo, useCallback, useState } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-import { PdfWordClickViewer, useTocOutline } from '@/components/Pdf';
+import { PdfWordClickViewer, useTocOutline, type PdfViewMode } from '@/components/Pdf';
 import { TocPanel } from '@/components/Pdf/Toc/TocPanel';
 import { ThumbnailPanel } from '@/components/Pdf/ThumbnailSidebar/ThumbnailPanel';
 import { PdfSidebarShell, SidebarHeader, SidebarPanel, type SidebarMode } from '@/components/Pdf/SidebarShell';
 import { usePinchZoom } from './hooks/usePinchZoom';
+import { useTheme } from '@/contexts/ThemeContext';
 import type { Document } from '@/types';
 
 interface PdfDocumentViewerProps {
   /** Document data */
   document: Document;
   /** Active word index for TTS highlighting */
-  activeWordIndex?: number;
+  activeWordIndex?: number | null;
+  /** Hovered word index for preview highlighting */
+  hoveredWordIndex?: number | null;
   /** Current page */
   currentPage: number;
   /** Target page for navigation */
@@ -31,35 +34,47 @@ interface PdfDocumentViewerProps {
   sidebarWidth: number;
   /** Current zoom scale */
   scale: number;
+  /** Current view mode */
+  viewMode: PdfViewMode;
   /** Callbacks */
   onDocumentLoad: (pdfDoc: PDFDocumentProxy) => void;
   onPageChange: (page: number) => void;
   onTocNavigate: (page: number) => void;
   onToggleToc: () => void;
   onWordClick: (event: { word: any }) => void;
+  onWordHover?: (wordIndex: number | null) => void;
   onZoomChange: (scale: number) => void;
   onSidebarWidthChange: (width: number) => void;
+  onViewModeChange: (mode: PdfViewMode) => void;
 }
 
 export const PdfDocumentViewer = memo(function PdfDocumentViewer({
   document,
   activeWordIndex,
+  hoveredWordIndex,
   currentPage,
   targetPage,
   pdfDocument,
   isTocOpen,
   sidebarWidth,
   scale,
+  viewMode,
   onDocumentLoad,
   onPageChange,
   onTocNavigate,
   onToggleToc,
   onWordClick,
+  onWordHover,
   onZoomChange,
   onSidebarWidthChange,
+  onViewModeChange,
 }: PdfDocumentViewerProps) {
   // Sidebar mode state: 'toc' or 'thumbnails'
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>('toc');
+
+  // Get theme for PDF dark mode inversion
+  const { theme, invertPdfInDarkMode } = useTheme();
+  const isDarkMode = theme === 'dark';
 
   // Get TOC from PDF document
   const { items: tocItems, isLoading: isTocLoading } = useTocOutline(pdfDocument);
@@ -140,11 +155,17 @@ export const PdfDocumentViewer = memo(function PdfDocumentViewer({
           url={pdfUrl}
           onWordClick={onWordClick}
           activeWordIndex={activeWordIndex}
+          hoveredWordIndex={hoveredWordIndex}
+          onWordHover={onWordHover}
           onDocumentLoad={onDocumentLoad}
           onPageChange={onPageChange}
+          onViewModeChange={onViewModeChange}
           externalPage={targetPage}
           initialScale={scale}
+          initialViewMode={viewMode}
           className="h-full"
+          isDarkMode={isDarkMode}
+          invertPdfInDarkMode={invertPdfInDarkMode}
         />
       </div>
     </div>

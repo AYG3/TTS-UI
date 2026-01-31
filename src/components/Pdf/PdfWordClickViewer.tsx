@@ -2,25 +2,34 @@
 
 /**
  * PdfWordClickViewer Component
- * Final orchestrator - clean & readable
+ * Continuous vertical page layout with word-level interaction
  * 
- * Responsibilities:
- * - Compose all hooks and components
- * - Handle page navigation
- * - Emit word click events to parent
- * - Manage loading states
+ * Features:
+ * - All pages rendered in vertical scroll container
+ * - Performance: Only renders pages within view window (±2 pages)
+ * - IntersectionObserver tracks current visible page
+ * - Auto-scroll syncs with TTS activeWordIndex
+ * - Word click events propagate to parent
+ * - Page navigation via toolbar or scroll
  * 
- * This is the ONLY component consumers need to use
+ * Architecture:
+ * PdfWordClickViewer
+ *  ├── Toolbar (navigation, zoom)
+ *  └── Scroll Container
+ *       ├── PdfPageView (Page 1)
+ *       ├── PdfPageView (Page 2)
+ *       └── ...
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { FiChevronLeft, FiChevronRight, FiZoomIn, FiZoomOut, FiLoader } from 'react-icons/fi';
 import { usePdfDocument } from './usePdfDocument';
-import { usePdfPage } from './usePdfPage';
-import { useWordLayout } from './useWordLayout';
-import { PdfCanvas } from './PdfCanvas';
-import { WordOverlay } from './WordOverlay';
-import type { WordClickEvent, OnWordClick } from './types';
+import { usePageWordOffsets } from './usePageWordOffsets';
+import { PdfPageView } from './PdfPageView';
+import type { OnWordClick, PdfViewMode } from './types';
+
+/** Number of pages to render above/below current page */
+const PAGE_RENDER_WINDOW = 5;
 
 interface PdfWordClickViewerProps {
   /** URL or data URI of the PDF */
@@ -28,45 +37,64 @@ interface PdfWordClickViewerProps {
   /** Callback when a word is clicked */
   onWordClick?: OnWordClick;
   /** Currently active word index (for TTS highlighting) */
-  activeWordIndex?: number;
+  activeWordIndex?: number | null;
+  /** Currently hovered word index (for preview highlighting) */
+  hoveredWordIndex?: number | null;
+  /** Callback when hovering over a word */
+  onWordHover?: (wordIndex: number | null) => void;
   /** Initial page number (1-indexed) */
   initialPage?: number;
   /** Initial scale */
   initialScale?: number;
+  /** Initial view mode */
+  initialViewMode?: PdfViewMode;
   /** Show word boundaries for debugging */
   debug?: boolean;
   /** Additional CSS classes */
   className?: string;
   /** Callback when page changes */
   onPageChange?: (page: number) => void;
+  /** Callback when view mode changes */
+  onViewModeChange?: (mode: PdfViewMode) => void;
   /** Callback when document is loaded, provides pdfDoc for TOC extraction */
   onDocumentLoad?: (pdfDoc: any) => void;
-  /** External page control */
+  /** External page control - scrolls to this page */
   externalPage?: number;
+  /** Whether dark mode is active */
+  isDarkMode?: boolean;
+  /** Whether to invert PDF colors in dark mode */
+  invertPdfInDarkMode?: boolean;
 }
 
 export function PdfWordClickViewer({
   url,
   onWordClick,
   activeWordIndex,
+  hoveredWordIndex,
+  onWordHover,
   initialPage = 1,
   initialScale = 1.5,
+  initialViewMode = 'single',
   debug = false,
   className = '',
   onPageChange,
+  onViewModeChange,
   onDocumentLoad,
   externalPage,
+  isDarkMode = false,
+  invertPdfInDarkMode = true,
 }: PdfWordClickViewerProps) {
   // State
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [scale, setScale] = useState(initialScale);
+  const [viewMode, setViewMode] = useState<PdfViewMode>(initialViewMode);
   const [containerWidth, setContainerWidth] = useState(0);
   
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
-  
-  // Track global word offset for multi-page documents
-  const [globalWordOffset, setGlobalWordOffset] = useState(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const isScrollingToPage = useRef(false);
 
   // Load document
   const {
@@ -76,6 +104,13 @@ export function PdfWordClickViewer({
     numPages,
   } = usePdfDocument(url);
 
+  // Compute word offsets for all pages
+  const {
+    getOffset,
+    getPageForWordIndex,
+    isLoading: isComputingOffsets,
+  } = usePageWordOffsets(pdfDoc);
+
   // Notify parent when document is loaded
   useEffect(() => {
     if (pdfDoc && onDocumentLoad) {
@@ -83,37 +118,31 @@ export function PdfWordClickViewer({
     }
   }, [pdfDoc, onDocumentLoad]);
 
-  // Handle external page changes
-  useEffect(() => {
-    if (externalPage !== undefined && externalPage !== currentPage) {
-      setCurrentPage(externalPage);
-    }
-  }, [externalPage]);
-
   // Notify parent of page changes
   useEffect(() => {
     onPageChange?.(currentPage);
   }, [currentPage, onPageChange]);
 
-  // Load current page
-  const {
-    page,
-    isLoading: isLoadingPage,
-    error: pageError,
-    viewport,
-  } = usePdfPage(pdfDoc, currentPage, { scale, containerWidth });
+  // Notify parent of view mode changes
+  useEffect(() => {
+    onViewModeChange?.(viewMode);
+  }, [viewMode, onViewModeChange]);
 
-  // Compute word layout
-  const {
-    words,
-    isComputing: isComputingLayout,
-    error: layoutError,
-  } = useWordLayout(
-    page,
-    scale,
-    viewport?.height ?? 0,
-    globalWordOffset
-  );
+  // Compute which pages to render (mode-aware)
+  // In continuous mode, render ALL pages to ensure consistent dark mode across entire document
+  const visiblePages = useMemo(() => {
+    if (viewMode === 'single') {
+      return [currentPage];
+    }
+
+    // Continuous mode: render all pages for consistent dark mode
+    // PDF.js handles its own virtualization, so this is safe
+    const pages: number[] = [];
+    for (let p = 1; p <= numPages; p++) {
+      pages.push(p);
+    }
+    return pages;
+  }, [viewMode, currentPage, numPages]);
 
   // Handle container resize
   useEffect(() => {
@@ -129,6 +158,101 @@ export function PdfWordClickViewer({
     return () => resizeObserver.disconnect();
   }, []);
 
+  // Track current page via IntersectionObserver (continuous mode only)
+  useEffect(() => {
+    if (viewMode !== 'continuous') return;
+    if (!scrollContainerRef.current || numPages === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Skip if we're programmatically scrolling to a page
+        if (isScrollingToPage.current) return;
+
+        // Find the most visible page
+        const visibleEntries = entries.filter(e => e.isIntersecting);
+        if (visibleEntries.length === 0) return;
+
+        const mostVisible = visibleEntries.reduce((best, entry) => 
+          entry.intersectionRatio > best.intersectionRatio ? entry : best
+        );
+
+        const pageNum = Number(mostVisible.target.getAttribute('data-page'));
+        if (pageNum && pageNum !== currentPage) {
+          setCurrentPage(pageNum);
+        }
+      },
+      {
+        root: scrollContainerRef.current,
+        threshold: [0.3, 0.5, 0.7],
+        rootMargin: '-10% 0px -10% 0px',
+      }
+    );
+
+    // Observe all page elements
+    pageRefs.current.forEach((element) => {
+      observer.observe(element);
+    });
+
+    return () => observer.disconnect();
+  }, [viewMode, numPages, currentPage, visiblePages]);
+
+  // Scroll to page helper
+  const scrollToPage = useCallback((pageNumber: number, behavior: ScrollBehavior = 'smooth') => {
+    const pageElement = pageRefs.current.get(pageNumber);
+    if (pageElement && scrollContainerRef.current) {
+      isScrollingToPage.current = true;
+      
+      pageElement.scrollIntoView({
+        behavior,
+        block: 'start',
+      });
+
+      // Reset flag after scroll completes
+      setTimeout(() => {
+        isScrollingToPage.current = false;
+      }, behavior === 'smooth' ? 500 : 50);
+    }
+  }, []);
+
+  // Handle external page changes (e.g., from TOC navigation)
+  useEffect(() => {
+    if (externalPage !== undefined && externalPage !== currentPage) {
+      setCurrentPage(externalPage);
+      scrollToPage(externalPage);
+    }
+  }, [externalPage, currentPage, scrollToPage]);
+
+  // Auto-scroll to active word (TTS sync, mode-aware)
+  useEffect(() => {
+    if (activeWordIndex === undefined || activeWordIndex === null || !pdfDoc) return;
+
+    // Find which page contains this word
+    const targetPage = getPageForWordIndex(activeWordIndex);
+    
+    // If target page is different, navigate to it
+    if (targetPage !== currentPage) {
+      setCurrentPage(targetPage);
+
+      if (viewMode === 'continuous') {
+        // Continuous mode: scroll to page if far away
+        const distance = Math.abs(targetPage - currentPage);
+        if (distance > PAGE_RENDER_WINDOW) {
+          scrollToPage(targetPage);
+        }
+      }
+      // Single mode: page swap happens via visiblePages change
+    }
+  }, [activeWordIndex, pdfDoc, currentPage, viewMode, getPageForWordIndex, scrollToPage]);
+
+  // Store page ref
+  const setPageRef = useCallback((pageNumber: number, element: HTMLDivElement | null) => {
+    if (element) {
+      pageRefs.current.set(pageNumber, element);
+    } else {
+      pageRefs.current.delete(pageNumber);
+    }
+  }, []);
+
   // Handle word click
   const handleWordClick = useCallback<OnWordClick>(
     (event) => {
@@ -140,16 +264,22 @@ export function PdfWordClickViewer({
 
   // Navigation handlers
   const goToPreviousPage = useCallback(() => {
-    setCurrentPage((p) => Math.max(1, p - 1));
-  }, []);
+    const newPage = Math.max(1, currentPage - 1);
+    setCurrentPage(newPage);
+    scrollToPage(newPage);
+  }, [currentPage, scrollToPage]);
 
   const goToNextPage = useCallback(() => {
-    setCurrentPage((p) => Math.min(numPages, p + 1));
-  }, [numPages]);
+    const newPage = Math.min(numPages, currentPage + 1);
+    setCurrentPage(newPage);
+    scrollToPage(newPage);
+  }, [currentPage, numPages, scrollToPage]);
 
   const goToPage = useCallback((page: number) => {
-    setCurrentPage(Math.max(1, Math.min(numPages, page)));
-  }, [numPages]);
+    const clampedPage = Math.max(1, Math.min(numPages, page));
+    setCurrentPage(clampedPage);
+    scrollToPage(clampedPage);
+  }, [numPages, scrollToPage]);
 
   // Zoom handlers
   const zoomIn = useCallback(() => {
@@ -161,10 +291,7 @@ export function PdfWordClickViewer({
   }, []);
 
   // Loading state
-  const isLoading = isLoadingDoc || isLoadingPage || isComputingLayout;
-  
-  // Error state
-  const error = docError || pageError || layoutError;
+  const isLoading = isLoadingDoc || isComputingOffsets;
 
   return (
     <div
@@ -172,7 +299,7 @@ export function PdfWordClickViewer({
       className={`flex flex-col bg-gray-100 dark:bg-gray-900 rounded-lg overflow-hidden ${className}`}
     >
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shrink-0">
         {/* Page Navigation */}
         <div className="flex items-center gap-2">
           <button
@@ -231,68 +358,74 @@ export function PdfWordClickViewer({
           </button>
         </div>
 
-        {/* Word Count */}
+        {/* Page Info */}
         <div className="text-sm text-gray-600 dark:text-gray-400">
-          {words.length} words on page
+          {numPages} pages
         </div>
       </div>
 
-      {/* PDF Viewer */}
-      <div className="flex-1 overflow-auto p-6">
+      {/* Scroll Container */}
+      <div
+        ref={scrollContainerRef}
+        className={`
+          flex-1 overflow-x-hidden p-6
+          ${viewMode === 'continuous' ? 'overflow-y-auto' : 'overflow-y-hidden'}
+        `}
+      >
         {/* Error State */}
-        {error && (
+        {docError && (
           <div className="flex items-center justify-center h-64 text-red-500">
-            <p>Error: {error.message}</p>
+            <p>Error: {docError.message}</p>
           </div>
         )}
 
-        {/* Loading State */}
-        {isLoading && !error && (
+        {/* Document Loading State */}
+        {isLoadingDoc && !docError && (
           <div className="flex items-center justify-center h-64">
             <FiLoader className="w-8 h-8 animate-spin text-blue-500" />
             <span className="ml-3 text-gray-600 dark:text-gray-400">
-              {isLoadingDoc ? 'Loading document...' : 
-               isLoadingPage ? 'Loading page...' : 
-               'Computing word layout...'}
+              Loading document...
             </span>
           </div>
         )}
 
-        {/* PDF Page */}
-        {page && viewport && !error && (
+        {/* Pages */}
+        {pdfDoc && !docError && (
           <div
-            className="relative mx-auto shadow-xl bg-white"
-            style={{
-              width: viewport.width,
-              height: viewport.height,
-            }}
+            className={`
+              flex flex-col items-center
+              ${viewMode === 'single' ? 'justify-center h-full' : ''}
+            `}
           >
-            {/* Canvas Layer */}
-            <PdfCanvas
-              page={page}
-              scale={scale}
-              width={viewport.width}
-              height={viewport.height}
-            />
-
-            {/* Word Overlay Layer */}
-            {!isComputingLayout && (
-              <WordOverlay
-                words={words}
-                onWordClick={handleWordClick}
+            {visiblePages.map((pageNumber) => (
+              <PdfPageView
+                // Include dark mode in key to force re-render on theme change
+                key={`page-${pageNumber}-${isDarkMode ? 'dark' : 'light'}-${invertPdfInDarkMode}`}
+                ref={(el) => setPageRef(pageNumber, el)}
+                pdfDoc={pdfDoc}
+                pageNumber={pageNumber}
+                scale={scale}
+                containerWidth={containerWidth}
+                globalWordOffset={getOffset(pageNumber)}
                 activeWordIndex={activeWordIndex}
+                hoveredWordIndex={hoveredWordIndex}
+                onWordClick={handleWordClick}
+                onWordHover={onWordHover}
                 debug={debug}
+                isCurrent={pageNumber === currentPage}
+                isDarkMode={isDarkMode}
+                invertPdfInDarkMode={invertPdfInDarkMode}
               />
-            )}
+            ))}
           </div>
         )}
       </div>
 
       {/* Debug Info */}
       {debug && (
-        <div className="px-4 py-2 bg-gray-800 text-white text-xs font-mono">
-          <p>Page: {currentPage}/{numPages} | Scale: {scale.toFixed(2)} | Words: {words.length}</p>
-          <p>Viewport: {viewport?.width?.toFixed(0)}x{viewport?.height?.toFixed(0)} | Active: {activeWordIndex ?? 'none'}</p>
+        <div className="px-4 py-2 bg-gray-800 text-white text-xs font-mono shrink-0">
+          <p>Page: {currentPage}/{numPages} | Scale: {scale.toFixed(2)} | Visible: [{visiblePages.join(', ')}]</p>
+          <p>Container: {containerWidth}px | Active Word: {activeWordIndex ?? 'none'} | Hovered: {hoveredWordIndex ?? 'none'}</p>
         </div>
       )}
     </div>

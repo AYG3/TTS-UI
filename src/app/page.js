@@ -5,8 +5,9 @@
  * Mobile-first responsive document reader
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDocumentStore } from '@/store/documentStore';
+import { useDocumentHistory } from '@/components/History';
 import Header from '@/components/shared/Header';
 import Footer from '@/components/shared/Footer';
 import UploadView from '@/components/Upload/UploadView';
@@ -20,11 +21,29 @@ export default function Home() {
     uploadProgress,
     error,
     uploadDocument,
+    loadDocument,
     clearDocument,
     clearError,
   } = useDocumentStore();
 
+  const { addDocument: addToHistory } = useDocumentHistory();
+
   const [selectedFile, setSelectedFile] = useState(null);
+
+  // Add successfully uploaded documents to history
+  useEffect(() => {
+    if (currentDocument && !isUploading) {
+      addToHistory({
+        id: currentDocument.id,
+        title: currentDocument.title,
+        fileType: currentDocument.fileType,
+        pageCount: currentDocument.pageCount,
+        wordCount: currentDocument.wordCount,
+        uploadedAt: currentDocument.createdAt || new Date().toISOString(),
+        hasAudio: false, // Will be updated when audio is generated
+      });
+    }
+  }, [currentDocument, isUploading, addToHistory]);
 
   const handleFileSelect = async (file) => {
     setSelectedFile(file);
@@ -34,6 +53,15 @@ export default function Home() {
       await uploadDocument(file);
     } catch (err) {
       console.error('Upload failed:', err);
+    }
+  };
+
+  const handleSelectDocument = async (documentId) => {
+    clearError();
+    try {
+      await loadDocument(documentId);
+    } catch (err) {
+      console.error('Failed to load document from history:', err);
     }
   };
 
@@ -68,6 +96,7 @@ export default function Home() {
               uploadProgress={uploadProgress}
               error={error}
               onFileSelect={handleFileSelect}
+              onSelectDocument={handleSelectDocument}
             />
           </div>
         ) : (
@@ -76,12 +105,14 @@ export default function Home() {
       </main>
 
       {/* Floating Audio Player - Shows when document is loaded */}
+      <div className='bg-white dark:bg-gray-900'> 
       {currentDocument && (
         <FloatingPlayer
           documentId={currentDocument.id}
           chapterTitle={currentDocument.title}
         />
       )}
+      </div>
 
       {/* Footer - Hidden when viewing document on mobile */}
       <div className={currentDocument ? 'hidden md:block' : ''}>

@@ -4,14 +4,16 @@
  * A high-performance, word-level interactive PDF viewer for TTS applications.
  * 
  * Architecture:
- * ├── types.ts              - Type definitions
- * ├── usePdfDocument.ts     - Document loading hook (cached)
- * ├── usePdfPage.ts         - Page loading hook (cached)
- * ├── usePdfText.ts         - Text extraction hook (cached)
- * ├── useWordLayout.ts      - Word bounding box computation (heavy logic, cached)
- * ├── PdfCanvas.tsx         - Pure render component (dumb, fast)
- * ├── WordOverlay.tsx       - Interaction layer (dumb, fast)
- * └── PdfWordClickViewer.tsx - Orchestrator (clean, readable)
+ * ├── types.ts                - Type definitions
+ * ├── usePdfDocument.ts       - Document loading hook (cached)
+ * ├── usePdfPage.ts           - Page loading hook (cached)
+ * ├── usePdfText.ts           - Text extraction hook (cached)
+ * ├── useWordLayout.ts        - Word bounding box computation (heavy logic, cached)
+ * ├── usePageWordOffsets.ts   - Global word offsets across pages (for TTS sync)
+ * ├── PdfCanvas.tsx           - Pure render component (dumb, fast)
+ * ├── WordOverlay.tsx         - Interaction layer (dumb, fast)
+ * ├── PdfPageView.tsx         - Single page view with canvas + overlay (memoized)
+ * └── PdfWordClickViewer.tsx  - Orchestrator with continuous vertical scroll
  * 
  * Usage:
  * ```tsx
@@ -52,18 +54,22 @@
 // Main component
 export { PdfWordClickViewer, default } from './PdfWordClickViewer';
 
+// Page component (for continuous scroll layout)
+export { PdfPageView } from './PdfPageView';
+
 // Hooks (for advanced usage)
 export { usePdfDocument, clearDocumentCache } from './usePdfDocument';
 export { usePdfPage, clearPageCache } from './usePdfPage';
 export { usePdfText, useFullDocumentText, clearTextCache } from './usePdfText';
 export { useWordLayout, clearLayoutCache } from './useWordLayout';
+export { usePageWordOffsets } from './usePageWordOffsets';
 
 // UI Components (for custom compositions)
 export { PdfCanvas } from './PdfCanvas';
 export { WordOverlay } from './WordOverlay';
 
 // TOC Components
-export { TocSidebar, TocItem, useTocOutline, getPdfTocOutlineWithPages } from './Toc';
+export { TocItem, useTocOutline, getPdfTocOutlineWithPages } from './Toc';
 export type { TocItemData } from './Toc';
 
 // Types
@@ -78,6 +84,7 @@ export type {
   WordClickEvent,
   OnWordClick,
   WordLayoutResult,
+  PdfViewMode,
 } from './types';
 
 // Cache management utility

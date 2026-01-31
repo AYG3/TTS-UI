@@ -8,6 +8,7 @@
 import { FiArrowLeft, FiMoon, FiSun, FiMenu, FiX } from 'react-icons/fi';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useState } from 'react';
+import SettingsMenu from './SettingsMenu';
 
 interface HeaderProps {
   /** Current document title (if any) */
@@ -39,6 +40,9 @@ export default function Header({ documentTitle, hasDocument, onReset }: HeaderPr
 
           {/* Mobile Actions */}
           <div className="flex items-center gap-2">
+            {/* Settings Menu */}
+            <SettingsMenu />
+            
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
@@ -112,6 +116,9 @@ export default function Header({ documentTitle, hasDocument, onReset }: HeaderPr
                 <span className="lg:hidden">New</span>
               </button>
             )}
+
+            {/* Settings Menu */}
+            <SettingsMenu />
 
             {/* Theme Toggle */}
             <button

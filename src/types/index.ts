@@ -173,6 +173,36 @@ export interface Voice {
   provider: TtsProvider;
 }
 
+/**
+ * Word timing for precise audio-text synchronization
+ * Used for real-time word highlighting during playback
+ */
+export interface WordTiming {
+  /** Global word index (matches NlpWord.index) */
+  wordIndex: number;
+  /** Start time in seconds */
+  start: number;
+  /** End time in seconds */
+  end: number;
+}
+
+/**
+ * Sentence timing for phrase-level highlighting
+ * Good fallback when word timestamps unavailable
+ */
+export interface SentenceTiming {
+  /** Sentence index */
+  sentenceIndex: number;
+  /** First word index in sentence */
+  startWordId: number;
+  /** Last word index in sentence */
+  endWordId: number;
+  /** Start time in seconds */
+  start: number;
+  /** End time in seconds */
+  end: number;
+}
+
 export interface AudioFileMetadata {
   documentId: string;
   chunkId: number;
@@ -185,6 +215,24 @@ export interface AudioFileMetadata {
   endWordId: number;
   charactersUsed: number;
   generatedAt: string;
+  /** Word-level timing (Level 1 - best) */
+  wordTimings?: WordTiming[];
+  /** Sentence-level timing (Level 2 - fallback) */
+  sentenceTimings?: SentenceTiming[];
+}
+
+/** Info about a chunk's audio generation status */
+export interface ChunkAudioInfo {
+  chunkId: number;
+  hasAudio: boolean;
+  durationSec?: number;
+  startWordId?: number;
+  endWordId?: number;
+  wordCount?: number;
+  /** Word-level timing (Level 1 - best) */
+  wordTimings?: WordTiming[];
+  /** Sentence-level timing (Level 2 - fallback) */
+  sentenceTimings?: SentenceTiming[];
 }
 
 export interface DocumentAudioMetadata {
@@ -194,17 +242,27 @@ export interface DocumentAudioMetadata {
   chunks: Chunk[];
   totalChunks: number;
   totalDurationSec: number;
+  /** Estimated total duration (available immediately, before generation) */
+  estimatedTotalDurationSec?: number;
   totalCharactersUsed: number;
   audioFiles: AudioFileMetadata[];
+  /** Info about which chunks have audio generated */
+  chunkInfo?: ChunkAudioInfo[];
   generatedAt: string;
   completedAt?: string;
-  status: 'pending' | 'generating' | 'completed' | 'failed';
+  status: 'pending' | 'generating' | 'ready' | 'completed' | 'failed';
   error?: string;
 }
 
 export interface GenerationStatus {
-  status: 'none' | 'pending' | 'generating' | 'completed' | 'failed';
+  status: 'none' | 'pending' | 'generating' | 'ready' | 'completed' | 'failed';
   progress?: number;
   error?: string;
   metadata?: DocumentAudioMetadata;
+  /** Estimated duration available immediately */
+  estimatedTotalDurationSec?: number;
+  /** Number of chunks that have audio generated */
+  generatedChunks?: number;
+  /** IDs of chunks that have audio ready */
+  chunksWithAudio?: number[];
 }

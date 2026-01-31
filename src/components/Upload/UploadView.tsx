@@ -7,6 +7,7 @@
 
 import UploadZone from './UploadZone';
 import UploadProgress from './UploadProgress';
+import { DocumentHistory } from '@/components/History';
 
 interface UploadViewProps {
   /** Currently selected file */
@@ -19,6 +20,8 @@ interface UploadViewProps {
   error: string | null;
   /** Callback when file is selected */
   onFileSelect: (file: File) => void;
+  /** Callback when a document is selected from history */
+  onSelectDocument?: (documentId: string) => void;
 }
 
 export default function UploadView({
@@ -27,6 +30,7 @@ export default function UploadView({
   uploadProgress,
   error,
   onFileSelect,
+  onSelectDocument,
 }: UploadViewProps) {
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl md:rounded-2xl shadow-lg md:shadow-xl p-4 sm:p-6 md:p-8 border border-gray-200 dark:border-gray-800">
@@ -111,6 +115,9 @@ export default function UploadView({
           </div>
         </div>
       </div>
+
+      {/* Document History */}
+      <DocumentHistory onSelectDocument={onSelectDocument} />
     </div>
   );
 }

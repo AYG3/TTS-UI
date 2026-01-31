@@ -45,8 +45,8 @@ interface UseAudioPlayerReturn {
   durationFormatted: string;
   totalDurationFormatted: string;
   
-  // Generation
-  generationStatus: 'none' | 'pending' | 'generating' | 'completed' | 'failed';
+  // Generation - 'ready' means initial chunks are ready for playback
+  generationStatus: 'none' | 'pending' | 'generating' | 'ready' | 'completed' | 'failed';
   generationProgress: number;
   
   // Controls

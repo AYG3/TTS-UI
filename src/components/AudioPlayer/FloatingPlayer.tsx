@@ -7,17 +7,19 @@
  * - Fixed position at bottom center
  * - Play/Pause with skip controls
  * - Chapter title display
- * - Time display (current / total)
- * - Speed control
+ * - Time display (current / total) - shows full book duration
+ * - Seekable progress bar with lazy audio loading
+ * - Speed control dropdown
  * - Language/voice indicator
  * - Works on mobile and desktop
  */
 
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useAudioPlayerStore, formatTime, PLAYBACK_SPEEDS } from '@/store/audioPlayerStore';
 import { VoiceSelector } from './VoiceSelector';
+import { SpeedSelector } from './SpeedSelector';
 
 interface FloatingPlayerProps {
   /** Document ID to load audio for */
@@ -36,13 +38,27 @@ export function FloatingPlayer({
   onExpand,
   className = '',
 }: FloatingPlayerProps) {
+  // Detect dark mode
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  useEffect(() => {
+    setIsDarkMode(document.documentElement.classList.contains('dark'));
+    const observer = new MutationObserver(() => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
   const {
     isPlaying,
     isLoading,
+    isLoadingChunk,
     currentTime,
     duration,
     currentChunkId,
     totalChunks,
+    chunksWithAudio,
+    estimatedTotalDuration,
     playbackSpeed,
     audioMetadata,
     generationStatus,
@@ -55,10 +71,13 @@ export function FloatingPlayer({
     loadDocument,
     generateAudio,
     loadVoices,
+    goToChunk,
   } = useAudioPlayerStore();
 
   // Voice selector state
   const [isVoiceSelectorOpen, setIsVoiceSelectorOpen] = useState(false);
+  // Speed selector state
+  const [isSpeedSelectorOpen, setIsSpeedSelectorOpen] = useState(false);
 
   // Load document audio when documentId changes
   useEffect(() => {
@@ -97,8 +116,45 @@ export function FloatingPlayer({
     setPlaybackSpeed(PLAYBACK_SPEEDS[nextIndex]);
   }, [playbackSpeed, setPlaybackSpeed]);
 
-  // Calculate total duration from metadata
-  const totalDuration = audioMetadata?.totalDurationSec || 0;
+  // Calculate full book duration (prefer estimated, update with actual as generated)
+  // estimatedTotalDuration is for the entire book, audioMetadata?.totalDurationSec is only generated chunks
+  const totalBookDuration = estimatedTotalDuration || audioMetadata?.totalDurationSec || 0;
+  
+  // Calculate estimated duration per chunk (for global time calculation)
+  const estimatedChunkDuration = totalChunks > 0 ? totalBookDuration / totalChunks : 0;
+  
+  // Calculate global current time across all chunks
+  // = (completed chunks * avg duration) + current chunk progress
+  const globalCurrentTime = (currentChunkId * estimatedChunkDuration) + currentTime;
+  
+  // Check if we're showing estimated vs actual duration
+  const isEstimatedDuration = estimatedTotalDuration > 0;
+  
+  // Calculate buffer indicator (how many chunks are ready)
+  const bufferProgress = totalChunks > 0 ? (chunksWithAudio.length / totalChunks) * 100 : 0;
+  
+  // Calculate global progress percentage
+  const globalProgress = totalBookDuration > 0 ? (globalCurrentTime / totalBookDuration) * 100 : 0;
+
+  // Handle seeking on the progress bar
+  const handleProgressSeek = useCallback(async (percentage: number) => {
+    const targetTime = (percentage / 100) * totalBookDuration;
+    const targetChunk = Math.floor(targetTime / estimatedChunkDuration);
+    const clampedChunk = Math.max(0, Math.min(totalChunks - 1, targetChunk));
+    const timeWithinChunk = targetTime - (clampedChunk * estimatedChunkDuration);
+    
+    // If seeking to a different chunk
+    if (clampedChunk !== currentChunkId) {
+      await goToChunk(clampedChunk, isPlaying);
+      // Wait a bit for audio to load, then seek within chunk
+      setTimeout(() => {
+        seekTo(Math.max(0, timeWithinChunk));
+      }, 500);
+    } else {
+      // Same chunk, just seek
+      seekTo(Math.max(0, timeWithinChunk));
+    }
+  }, [totalBookDuration, estimatedChunkDuration, totalChunks, currentChunkId, goToChunk, isPlaying, seekTo]);
 
   // Display title
   const displayTitle = chapterTitle || `Segment ${currentChunkId + 1} of ${totalChunks}`;
@@ -124,53 +180,57 @@ export function FloatingPlayer({
   // Show generation UI if no audio
   if (!audioMetadata && generationStatus?.status !== 'generating') {
     return (
-      <>
-        <div
-          className={`fixed bottom-0 left-0 right-0 z-50 flex justify-center pb-4 px-4 pointer-events-none ${className}`}
+    <>
+      <div
+        className={`fixed bottom-0 left-0 right-0 z-50 flex justify-center pb-4 px-4 pointer-events-none ${className}`}
+    
+      >
+        <div className="pointer-events-auto w-full max-w-lg bg-gray-900 text-white rounded-2xl shadow-2xl border border-gray-800 p-4" 
+        style={{ backgroundColor: isDarkMode ? 'black' : 'white' }}
         >
-          <div className="pointer-events-auto w-full max-w-lg bg-gray-900/95 backdrop-blur-sm text-white rounded-2xl shadow-2xl border border-gray-800 p-4">
-            <div className="text-center">
-              <p className="text-sm text-gray-400 mb-3">
-                Generate audio to start listening
-              </p>
-              
-              {/* Voice selector button */}
-              <button
-                onClick={() => setIsVoiceSelectorOpen(true)}
-                className="flex items-center gap-2 mx-auto mb-3 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-full transition-colors"
-              >
-                <span className="text-xl">{voiceFlag}</span>
-                <span className="text-sm">
-                  {currentVoice?.name || 'Select Voice'}
-                </span>
-                <ChevronDownIcon />
-              </button>
+        <div className="text-center">
+          <p className="text-sm text-gray-400 mb-3">
+            Generate audio to start listening
+          </p>
+          
+          {/* Voice selector button */}
+          <button
+            onClick={() => setIsVoiceSelectorOpen(true)}
+            className="flex items-center gap-2 mx-auto mb-3 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-full transition-colors"
+          >
+            <span className="text-xl">{voiceFlag}</span>
+            <span className="text-sm">
+            {currentVoice?.name || 'Select Voice'}
+            </span>
+            <ChevronDownIcon />
+          </button>
 
-              <button
-                onClick={() => generateAudio(selectedVoiceId || undefined)}
-                disabled={isLoading || !documentId}
-                className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 text-white px-6 py-3 rounded-full font-medium transition-colors"
-              >
-                {isLoading ? 'Loading...' : '🎧 Generate Audio'}
-              </button>
-            </div>
-          </div>
+          <button
+            onClick={() => generateAudio(selectedVoiceId || undefined)}
+            disabled={isLoading || !documentId}
+            className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 text-white px-6 py-3 rounded-full font-medium transition-colors"
+          >
+            {isLoading ? 'Loading...' : '🎧 Generate Audio'}
+          </button>
         </div>
-        <VoiceSelector
-          isOpen={isVoiceSelectorOpen}
-          onClose={() => setIsVoiceSelectorOpen(false)}
-        />
-      </>
+        </div>
+      </div>
+      <VoiceSelector
+        isOpen={isVoiceSelectorOpen}
+        onClose={() => setIsVoiceSelectorOpen(false)}
+      />
+    </>
     );
   }
 
-  // Show generation progress
-  if (generationStatus?.status === 'generating') {
+  // Show generation progress (only for initial generation, not 'ready' state)
+  if (generationStatus?.status === 'generating' && chunksWithAudio.length === 0) {
     return (
       <div
         className={`fixed bottom-0 left-0 right-0 z-50 flex justify-center pb-4 px-4 pointer-events-none ${className}`}
+        style={{ backgroundColor: isDarkMode ? 'black' : 'white' }}
       >
-        <div className="pointer-events-auto w-full max-w-lg bg-gray-900/95 backdrop-blur-sm text-white rounded-2xl shadow-2xl border border-gray-800 p-4">
+        <div className="pointer-events-auto w-full max-w-lg bg-gray-900 text-white rounded-2xl shadow-2xl border border-gray-800 p-4">
           <div className="text-center">
             <p className="text-sm text-gray-400 mb-2">Generating audio...</p>
             <div className="w-full bg-gray-700 rounded-full h-2 mb-2">
@@ -192,17 +252,18 @@ export function FloatingPlayer({
     <>
       <div
         className={`fixed bottom-0 left-0 right-0 z-50 flex justify-center pb-4 px-4 pointer-events-none ${className}`}
+        style={{ backgroundColor: isDarkMode ? 'black' : 'white' }}
       >
-        <div className="pointer-events-auto w-full max-w-lg bg-gray-900/95 text-white rounded-2xl shadow-2xl border border-gray-800">
+        <div className="pointer-events-auto w-full max-w-lg bg-gray-900 text-white rounded-2xl shadow-2xl border border-gray-800">
           {/* Chapter title row */}
         <div
           className="flex items-center justify-between px-4 pt-3 pb-2 cursor-pointer"
           onClick={onExpand}
           role={onExpand ? 'button' : undefined}
         >
-          {/* Current time */}
+          {/* Current time (global across all chunks) */}
           <span className="text-sm font-mono text-gray-300 min-w-[50px]">
-            {formatTime(currentTime)}
+            {formatTime(globalCurrentTime)}
           </span>
 
           {/* Chapter title with expand indicator */}
@@ -217,9 +278,9 @@ export function FloatingPlayer({
             {onExpand && <ChevronRightIcon />}
           </button>
 
-          {/* Total duration */}
-          <span className="text-sm font-mono text-gray-400 min-w-[65px] text-right">
-            {formatTime(totalDuration)}
+          {/* Total duration (full book, with estimated indicator) */}
+          <span className="text-sm font-mono text-gray-400 min-w-[65px] text-right" title={isEstimatedDuration ? 'Estimated book duration' : 'Total book duration'}>
+            {isEstimatedDuration && '~'}{formatTime(totalBookDuration)}
           </span>
         </div>
 
@@ -246,11 +307,11 @@ export function FloatingPlayer({
           {/* Play/Pause button */}
           <button
             onClick={handlePlayPause}
-            disabled={isLoading}
+            disabled={isLoading || isLoadingChunk}
             className="w-16 h-16 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 rounded-full flex items-center justify-center transition-all hover:scale-105 shadow-lg"
             aria-label={isPlaying ? 'Pause' : 'Play'}
           >
-            {isLoading ? (
+            {isLoading || isLoadingChunk ? (
               <LoadingSpinner />
             ) : isPlaying ? (
               <PauseIcon />
@@ -268,26 +329,56 @@ export function FloatingPlayer({
             <SkipForwardIcon />
           </button>
 
-          {/* Speed control */}
-          <button
-            onClick={cycleSpeed}
-            className="w-12 h-12 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-sm font-bold transition-colors"
-            aria-label={`Playback speed: ${playbackSpeed}x`}
-          >
-            {playbackSpeed}×
-          </button>
-        </div>
-
-        {/* Progress bar */}
-        <div className="px-4 pb-3">
-          <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-blue-500 transition-all duration-150"
-              style={{
-                width: `${totalDuration > 0 ? (currentTime / totalDuration) * 100 : 0}%`,
+          {/* Speed control dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setIsSpeedSelectorOpen(!isSpeedSelectorOpen)}
+              className="w-12 h-12 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-sm font-bold transition-colors"
+              aria-label={`Playback speed: ${playbackSpeed}x`}
+            >
+              {playbackSpeed}×
+            </button>
+            <SpeedSelector
+              isOpen={isSpeedSelectorOpen}
+              onClose={() => setIsSpeedSelectorOpen(false)}
+              currentSpeed={playbackSpeed}
+              onSpeedChange={(speed: number) => {
+                setPlaybackSpeed(speed);
+                setIsSpeedSelectorOpen(false);
               }}
             />
           </div>
+        </div>
+
+        {/* Seekable progress bar with buffer indicator */}
+        <div className="px-4 pb-3">
+          <div 
+            className="h-2 bg-gray-700 rounded-full overflow-hidden relative cursor-pointer group"
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const percentage = ((e.clientX - rect.left) / rect.width) * 100;
+              handleProgressSeek(Math.max(0, Math.min(100, percentage)));
+            }}
+          >
+            {/* Buffer indicator (shows how much audio is ready) */}
+            {bufferProgress > 0 && (
+              <div
+                className="absolute h-full bg-gray-500 transition-all duration-300"
+                style={{ width: `${bufferProgress}%` }}
+              />
+            )}
+            {/* Playback progress (global across all chunks) */}
+            <div
+              className="relative h-full bg-blue-500 transition-all duration-150"
+              style={{ width: `${globalProgress}%` }}
+            />
+            {/* Hover indicator */}
+            <div className="absolute inset-0 bg-blue-400 opacity-0 group-hover:opacity-20 transition-opacity" />
+          </div>
+          {/* Loading chunk indicator */}
+          {isLoadingChunk && (
+            <p className="text-xs text-gray-500 text-center mt-1">Loading segment...</p>
+          )}
         </div>
       </div>
     </div>

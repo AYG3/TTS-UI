@@ -4,9 +4,10 @@
  */
 
 export { AudioPlayer, default } from './AudioPlayer';
-export { MiniPlayer } from './MiniPlayer';
+// export { MiniPlayer } from './MiniPlayer';
 export { FloatingPlayer } from './FloatingPlayer';
 export { VoiceSelector } from './VoiceSelector';
+export { SpeedSelector } from './SpeedSelector';
 export { AudioPlayerHeader } from './AudioPlayerHeader';
 export { AudioPlayerProgress } from './AudioPlayerProgress';
 export { AudioPlayerControls } from './AudioPlayerControls';

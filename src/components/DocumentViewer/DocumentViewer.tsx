@@ -6,7 +6,7 @@
  * Supports PDF with TOC and pinch-to-zoom, and text files
  */
 
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import type { Document } from '@/types';
 import { useDocumentViewer } from './hooks/useDocumentViewer';
 import { DocumentStatsBar } from './DocumentStatsBar';
@@ -22,31 +22,38 @@ export const DocumentViewer = memo(function DocumentViewer({ document }: Documen
   const {
     // State
     activeWordIndex,
+    hoveredWordIndex,
     currentPage,
     targetPage,
     pdfDocument,
     isTocOpen,
     sidebarWidth,
     scale,
+    viewMode,
     // Actions
     handleDocumentLoad,
     handlePageChange,
     handleTocNavigate,
     toggleToc,
     handleWordClick,
+    handleWordHover,
     handleZoomChange,
     handleSidebarWidthChange,
+    handleViewModeChange,
     resetZoom,
+    setDocumentId,
   } = useDocumentViewer();
+
+  // Set document ID when document changes - enables word click → audio seek
+  // and resets audio player when switching documents
+  useEffect(() => {
+    setDocumentId(document.id);
+  }, [document.id, setDocumentId]);
 
   const isPdf = document.fileType === 'pdf';
 
-  // Zoom handlers
-  const handleZoomIn = () => handleZoomChange(scale + 0.25);
-  const handleZoomOut = () => handleZoomChange(scale - 0.25);
-
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl md:rounded-2xl overflow-hidden shadow-lg md:shadow-xl border border-gray-200 dark:border-gray-800">
+    <div className="bg-white dark:bg-gray-900 rounded-xl md:rounded-2xl shadow-lg md:shadow-xl border border-gray-200 dark:border-gray-800">
       {/* Stats Bar */}
       <DocumentStatsBar
         document={document}
@@ -54,9 +61,6 @@ export const DocumentViewer = memo(function DocumentViewer({ document }: Documen
         scale={isPdf ? scale : undefined}
         isTocOpen={isTocOpen}
         onToggleToc={isPdf ? toggleToc : undefined}
-        onZoomIn={isPdf ? handleZoomIn : undefined}
-        onZoomOut={isPdf ? handleZoomOut : undefined}
-        onResetZoom={isPdf ? resetZoom : undefined}
       />
 
       {/* Document Content */}
@@ -64,19 +68,23 @@ export const DocumentViewer = memo(function DocumentViewer({ document }: Documen
         <PdfDocumentViewer
           document={document}
           activeWordIndex={activeWordIndex}
+          hoveredWordIndex={hoveredWordIndex}
           currentPage={currentPage}
           targetPage={targetPage}
           pdfDocument={pdfDocument}
           isTocOpen={isTocOpen}
           sidebarWidth={sidebarWidth}
           scale={scale}
+          viewMode={viewMode}
           onDocumentLoad={handleDocumentLoad}
           onPageChange={handlePageChange}
           onTocNavigate={handleTocNavigate}
           onToggleToc={toggleToc}
           onWordClick={handleWordClick}
+          onWordHover={handleWordHover}
           onZoomChange={handleZoomChange}
           onSidebarWidthChange={handleSidebarWidthChange}
+          onViewModeChange={handleViewModeChange}
         />
       ) : (
         <TextDocumentViewer document={document} />

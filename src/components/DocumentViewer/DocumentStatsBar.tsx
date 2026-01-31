@@ -6,8 +6,9 @@
  */
 
 import { memo } from 'react';
-import { FiList, FiZoomIn, FiZoomOut, FiRotateCcw } from 'react-icons/fi';
+import { FiList, FiFile, FiLayers } from 'react-icons/fi';
 import type { Document } from '@/types';
+import type { PdfViewMode } from '@/components/Pdf';
 
 interface DocumentStatsBarProps {
   /** Document data */
@@ -18,14 +19,9 @@ interface DocumentStatsBarProps {
   scale?: number;
   /** Whether TOC is open */
   isTocOpen?: boolean;
-  /** Toggle TOC callback */
+  /** Current view mode (for PDFs) */
   onToggleToc?: () => void;
-  /** Zoom in callback */
-  onZoomIn?: () => void;
-  /** Zoom out callback */
-  onZoomOut?: () => void;
-  /** Reset zoom callback */
-  onResetZoom?: () => void;
+  /** View mode change callback */
 }
 
 export const DocumentStatsBar = memo(function DocumentStatsBar({
@@ -34,14 +30,11 @@ export const DocumentStatsBar = memo(function DocumentStatsBar({
   scale,
   isTocOpen,
   onToggleToc,
-  onZoomIn,
-  onZoomOut,
-  onResetZoom,
 }: DocumentStatsBarProps) {
   const isPdf = document.fileType === 'pdf';
 
   return (
-    <div className="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+    <div className="border-b border-gray-200 text-black dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
       {/* Mobile View */}
       <div className="flex md:hidden flex-col px-3 py-2 gap-2">
         {/* Top row: Title and TOC toggle */}
@@ -64,8 +57,8 @@ export const DocumentStatsBar = memo(function DocumentStatsBar({
           )}
         </div>
 
-        {/* Bottom row: Stats and zoom controls */}
-        <div className="flex items-center justify-between">
+        {/* Bottom row: Stats and view mode toggle */}
+        {/* <div className="flex items-center justify-between"> */}
           <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
             <span>{document.fileType.toUpperCase()}</span>
             {document.pageCount && (
@@ -83,8 +76,7 @@ export const DocumentStatsBar = memo(function DocumentStatsBar({
               </>
             )}
           </div>
-
-        </div>
+        {/* </div> */}
       </div>
 
       {/* Desktop View */}
@@ -130,6 +122,7 @@ export const DocumentStatsBar = memo(function DocumentStatsBar({
         </div>
 
         <div className="flex items-center gap-4">
+
           <span className="text-sm text-gray-500 dark:text-gray-400">
             {document.wordCount.toLocaleString()} words
           </span>

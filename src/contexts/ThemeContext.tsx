@@ -17,12 +17,15 @@ type Theme = 'light' | 'dark';
 interface ThemeContextType {
   theme: Theme;
   toggleTheme: () => void;
+  invertPdfInDarkMode: boolean;
+  togglePdfInversion: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>('light');
+  const [invertPdfInDarkMode, setInvertPdfInDarkMode] = useState(true);
   const [mounted, setMounted] = useState(false);
 
   // Load theme from localStorage on mount and apply to document
@@ -37,6 +40,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
+    }
+
+    // Load PDF inversion preference (default: true)
+    const savedPdfInversion = localStorage.getItem('invertPdfInDarkMode');
+    if (savedPdfInversion !== null) {
+      setInvertPdfInDarkMode(savedPdfInversion === 'true');
+    } else {
+      // Default to true and save it
+      setInvertPdfInDarkMode(true);
+      localStorage.setItem('invertPdfInDarkMode', 'true');
     }
 
     // Now that theme is initialized, allow children to be visible
@@ -55,10 +68,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const togglePdfInversion = () => {
+    const newValue = !invertPdfInDarkMode;
+    setInvertPdfInDarkMode(newValue);
+    localStorage.setItem('invertPdfInDarkMode', String(newValue));
+  };
+
   // Always provide the context to children so hooks won't throw, but hide
   // the UI until initialization completes to prevent flash-of-unstyled-theme.
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, invertPdfInDarkMode, togglePdfInversion }}>
       <div style={{ visibility: mounted ? 'visible' : 'hidden' }}>{children}</div>
     </ThemeContext.Provider>
   );

@@ -65,7 +65,8 @@ export const ttsApi = {
   },
 
   /**
-   * Start audio generation for a document (async)
+   * Start audio generation for a document (progressive mode)
+   * Returns immediately with estimated duration; generates initial chunks in background
    */
   generateAudio: async (
     documentId: string,
@@ -74,10 +75,22 @@ export const ttsApi = {
       speed?: number;
       chunkIds?: number[];
     }
-  ): Promise<{ documentId: string; status: string } | null> => {
+  ): Promise<{ 
+    documentId: string; 
+    status: string;
+    totalChunks?: number;
+    estimatedTotalDurationSec?: number;
+    initialChunksToGenerate?: number;
+  } | null> => {
     try {
       const response = await apiClient.post<
-        ApiResponse<{ documentId: string; status: string }>
+        ApiResponse<{ 
+          documentId: string; 
+          status: string;
+          totalChunks?: number;
+          estimatedTotalDurationSec?: number;
+          initialChunksToGenerate?: number;
+        }>
       >('/api/tts/generate', {
         documentId,
         ...options,
@@ -193,6 +206,35 @@ export const ttsApi = {
    */
   getChunkAudioUrl: (documentId: string, chunkId: number): string => {
     return `${API_BASE}/api/tts/${documentId}/audio/${chunkId}`;
+  },
+
+  /**
+   * Trigger prefetch of upcoming chunks (progressive generation)
+   * Called automatically when playback reaches 80% of current chunk
+   */
+  prefetchChunks: async (
+    documentId: string,
+    currentChunkId: number,
+    voiceId?: string
+  ): Promise<{ chunksQueued: number[]; alreadyGenerated: number[] }> => {
+    try {
+      const response = await apiClient.post<
+        ApiResponse<{ chunksQueued: number[]; alreadyGenerated: number[] }>
+      >('/api/tts/prefetch', {
+        documentId,
+        currentChunkId,
+        voiceId,
+      });
+
+      if (!response.data.success || !response.data.data) {
+        throw new Error(response.data.error || 'Failed to prefetch chunks');
+      }
+
+      return response.data.data;
+    } catch (error) {
+      console.error('Failed to prefetch chunks:', error);
+      throw error;
+    }
   },
 
   /**
